@@ -1,0 +1,115 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f2a44">
+<link rel="manifest" href="manifest.json"><link rel="icon" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png">
+<title>Cuaderno de lectura</title>
+<style>
+:root{--bg:#f2f4f7;--card:#fff;--ink:#1c2233;--mut:#69708a;--acc:#1f2a44;--onacc:#fff;--hl:#f5d547;--line:#dde1ea}
+@media(prefers-color-scheme:dark){:root{--bg:#12151c;--card:#1b2030;--ink:#e9ecf4;--mut:#99a0b8;--acc:#e9ecf4;--onacc:#12151c;--line:#2b3247}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:env(safe-area-inset-top) 0 calc(88px + env(safe-area-inset-bottom))}
+header{padding:14px 16px 6px;max-width:640px;margin:auto}
+h1{font:600 22px/1.2 'Iowan Old Style',Palatino,Georgia,serif;margin:0}
+#cur{background:none;border:0;color:var(--mut);padding:2px 0;font:inherit;font-size:14px;text-align:left}
+nav{display:flex;gap:4px;overflow-x:auto;padding:6px 12px;max-width:640px;margin:auto;position:sticky;top:env(safe-area-inset-top);background:var(--bg);z-index:2}
+.tab{flex:none;border:0;background:none;color:var(--mut);font:inherit;padding:8px 12px;border-bottom:3px solid transparent}
+.tab.on{color:var(--ink);font-weight:600;border-color:var(--hl)}
+main{max-width:640px;margin:auto;padding:4px 12px}
+.bar{display:flex;gap:8px;margin:6px 0}.bar>*{flex:1;min-width:0}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;margin:4px 0}
+textarea{resize:vertical}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:8px 0}
+.tx{font:18px/1.4 'Iowan Old Style',Palatino,Georgia,serif;background:linear-gradient(transparent 62%,color-mix(in srgb,var(--hl) 55%,transparent) 62%);display:inline;white-space:pre-wrap}
+.dt{color:var(--ink);margin-top:6px}.mt,.mut{color:var(--mut);font-size:13px}.empty{color:var(--mut);text-align:center;margin:40px 12px}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+button{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:8px 12px}
+button.pri{background:var(--acc);color:var(--onacc);border-color:var(--acc)}
+.chip{border-radius:99px;font-size:13px;padding:5px 12px}.chip.on{background:var(--hl);color:#1c2233;border-color:var(--hl)}
+span.chip{display:inline-block;padding:1px 8px;border:1px solid var(--line);font-size:12px;vertical-align:middle}
+#fab{position:fixed;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));width:58px;height:58px;border-radius:50%;background:var(--hl);color:#1c2233;border:0;font-size:32px;line-height:1;box-shadow:0 2px 10px #0004;z-index:3}
+.sh{position:fixed;inset:0;background:#0007;z-index:5;display:flex;align-items:flex-end}
+.pn{background:var(--bg);width:100%;max-width:640px;margin:auto;border-radius:16px 16px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom));max-height:92%;overflow:auto}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:var(--acc);color:var(--onacc);padding:8px 16px;border-radius:99px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}#toast.on{opacity:1}
+</style></head><body>
+<header><h1>Cuaderno de lectura</h1><button id="cur"></button></header>
+<nav id="nav"></nav><main id="main"></main>
+<button id="fab" aria-label="Anotar">+</button>
+<div class="sh" id="sh" hidden><div class="pn">
+<div class="chips" id="tc"></div><select id="sb"></select>
+<textarea id="st" rows="3"></textarea><input id="sd"><input id="sp" placeholder="Página (opcional)" inputmode="numeric">
+<div class="row"><button class="pri" id="ok">Guardar</button><button id="no">Cancelar</button><button id="rm" hidden>Eliminar</button></div>
+</div></div>
+<input type="file" id="fi" accept=".json,application/json" hidden><div id="toast"></div>
+<script>
+const $=s=>document.querySelector(s),T={w:'Palabra',f:'Frase',p:'Personaje',a:'Apreciación'},TP={w:'Palabras',f:'Frases',p:'Personajes',a:'Apreciaciones',b:'Libros'};
+const DL={w:'Significado (opcional)',f:'Quién lo dice o contexto (opcional)',p:'Descripción (opcional)'};
+let db={books:[],entries:[],current:null},tab='w',fb='',q='',ed=null,ty='w';
+try{Object.assign(db,JSON.parse(localStorage.getItem('cl')||'{}'))}catch(e){}
+const save=()=>{try{localStorage.setItem('cl',JSON.stringify(db))}catch(e){toast('No se pudo guardar')}};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const bk=id=>db.books.find(b=>b.id===id);
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1800)}
+const card=e=>{const b=bk(e.bookId);return `<div class="card" data-id="${e.id}"><span class="tx">${esc(e.text)}</span>${e.detail?`<div class="dt">${esc(e.detail)}</div>`:''}<div class="mt">${esc(b?b.title:'Sin libro')}${e.page?', p. '+esc(e.page):''}</div></div>`};
+function renderList(){
+ const l=db.entries.filter(e=>e.type===tab&&(!fb||e.bookId===fb)&&(!q||(e.text+' '+e.detail).toLowerCase().includes(q.toLowerCase()))).sort((a,b)=>b.ts-a.ts);
+ $('#lst').innerHTML=`<p class="mut">${l.length} ${TP[tab].toLowerCase()}</p>`+(l.map(card).join('')||'<p class="empty">Aún no hay nada aquí. Toca + para anotar.</p>');
+}
+function booksView(){
+ const n=(id,t)=>db.entries.filter(e=>e.bookId===id&&e.type===t).length;
+ return `<div class="card"><b>Agregar libro</b><input id="bt" placeholder="Título"><input id="ba" placeholder="Autor (opcional)"><button class="pri" data-act="addb">Agregar libro</button></div>`+
+ db.books.map(b=>`<div class="card"><span class="tx">${esc(b.title)}</span> ${b.id===db.current?'<span class="chip">leyendo</span>':''}${b.done?' <span class="chip">terminado</span>':''}<div class="dt">${esc(b.author||'')}</div><div class="mt">${n(b.id,'w')} palabras, ${n(b.id,'f')} frases, ${n(b.id,'p')} personajes, ${n(b.id,'a')} apreciaciones</div><div class="row"><button data-act="cur" data-id="${b.id}">Leer ahora</button><button data-act="flt" data-id="${b.id}">Ver anotaciones</button><button data-act="done" data-id="${b.id}">${b.done?'Reabrir':'Terminé'}</button><button data-act="delb" data-id="${b.id}">Eliminar</button></div></div>`).join('')+
+ `<div class="card"><b>Respaldo</b><p class="mut">Tus datos viven solo en este teléfono. Exporta una copia de vez en cuando.</p><div class="row"><button data-act="exp">Exportar copia</button><button data-act="imp">Importar copia</button></div></div>`;
+}
+function render(){
+ const cb=bk(db.current);$('#cur').textContent=cb?'Leyendo: '+cb.title:'Elige tu libro actual en Libros';
+ $('#nav').innerHTML=Object.keys(TP).map(k=>`<button class="tab${k===tab?' on':''}" data-t="${k}">${TP[k]}</button>`).join('');
+ const m=$('#main');
+ if(tab==='b'){m.innerHTML=booksView();return}
+ m.innerHTML=`<div class="bar"><select id="fb"><option value="">Todos los libros</option>${db.books.map(b=>`<option value="${b.id}"${b.id===fb?' selected':''}>${esc(b.title)}</option>`).join('')}</select><input id="q" type="search" placeholder="Buscar" value="${esc(q)}"></div><div id="lst"></div>`;
+ $('#fb').onchange=e=>{fb=e.target.value;renderList()};$('#q').oninput=e=>{q=e.target.value;renderList()};renderList();
+}
+function setTy(t){ty=t;$('#tc').innerHTML=Object.keys(T).map(k=>`<button class="chip${k===t?' on':''}" data-ty="${k}">${T[k]}</button>`).join('');
+ $('#st').placeholder={w:'Palabra',f:'Frase',p:'Nombre del personaje',a:'Mis apreciaciones del libro'}[t];
+ $('#st').rows=t==='a'?6:3;$('#sd').hidden=t==='a';$('#sd').placeholder=DL[t]||''}
+function openSheet(e,t,b){
+ if(!db.books.length){tab='b';render();toast('Primero agrega un libro');return}
+ ed=e||null;
+ $('#sb').innerHTML=db.books.map(x=>`<option value="${x.id}">${esc(x.title)}</option>`).join('');
+ $('#sb').value=e?e.bookId:(b||db.current||db.books[0].id);
+ $('#st').value=e?e.text:'';$('#sd').value=e?e.detail:'';$('#sp').value=e?e.page:'';
+ $('#rm').hidden=!e;$('#sh').hidden=false;setTy(e?e.type:(t||(T[tab]?tab:'w')));$('#st').focus();
+}
+$('#tc').onclick=e=>{const t=e.target.dataset.ty;if(t)setTy(t)};
+$('#fab').onclick=()=>openSheet();
+$('#no').onclick=()=>$('#sh').hidden=true;
+$('#ok').onclick=()=>{const text=$('#st').value.trim();if(!text){toast('Escribe algo primero');return}
+ const o={type:ty,bookId:$('#sb').value,text,detail:ty==='a'?'':$('#sd').value.trim(),page:$('#sp').value.trim()};
+ if(ed)Object.assign(ed,o);else db.entries.push({id:uid(),ts:Date.now(),...o});
+ save();$('#sh').hidden=true;render();toast('Guardado')};
+$('#rm').onclick=()=>{if(ed&&confirm('¿Eliminar esta anotación?')){db.entries=db.entries.filter(x=>x!==ed);save();$('#sh').hidden=true;render()}};
+$('#cur').onclick=()=>{tab='b';render()};
+$('#nav').onclick=e=>{const t=e.target.dataset.t;if(t){tab=t;render()}};
+$('#main').onclick=e=>{
+ const c=e.target.closest('.card[data-id]');
+ if(c&&!e.target.closest('button')){const x=db.entries.find(i=>i.id===c.dataset.id);if(x)openSheet(x);return}
+ const a=e.target.dataset.act,id=e.target.dataset.id;if(!a)return;
+ if(a==='addb'){const t=$('#bt').value.trim();if(!t){toast('Escribe el título');return}
+  const b={id:uid(),title:t,author:$('#ba').value.trim(),done:false};db.books.push(b);if(!db.current)db.current=b.id;save();render()}
+ if(a==='cur'){db.current=id;save();render()}
+ if(a==='flt'){fb=id;tab='w';render()}
+ if(a==='done'){const b=bk(id);b.done=!b.done;save();render();if(b.done)openSheet(null,'a',id)}
+ if(a==='delb'){const n=db.entries.filter(x=>x.bookId===id).length;
+  if(confirm(`¿Eliminar el libro y sus ${n} anotaciones?`)){db.books=db.books.filter(b=>b.id!==id);db.entries=db.entries.filter(x=>x.bookId!==id);if(db.current===id)db.current=null;if(fb===id)fb='';save();render()}}
+ if(a==='exp'){const u=URL.createObjectURL(new Blob([JSON.stringify(db)],{type:'application/json'}));const l=document.createElement('a');l.href=u;l.download='cuaderno-lectura-'+new Date().toISOString().slice(0,10)+'.json';l.click();setTimeout(()=>URL.revokeObjectURL(u),1000)}
+ if(a==='imp')$('#fi').click();
+};
+$('#fi').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+ r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.books)||!Array.isArray(d.entries))throw 0;
+  if(confirm(`Se reemplazarán tus datos actuales por ${d.books.length} libros y ${d.entries.length} anotaciones. ¿Continuar?`)){db={books:d.books,entries:d.entries,current:d.current||null};save();render();toast('Copia importada')}}
+  catch(x){toast('El archivo no es una copia válida')}};r.readAsText(f);e.target.value=''};
+render();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script></body></html>
